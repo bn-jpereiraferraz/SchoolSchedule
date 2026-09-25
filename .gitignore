@@ -1,0 +1,29 @@
+# Build directories
+build/
+cmake-build-*/
+
+# Qt generated files
+*.autosave
+*.user
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# Compiled files
+*.o
+*.so
+*.dylib
+*.exe
+SchoolCalendar
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
