@@ -1,15 +1,53 @@
 #include "mainwindow.h"
 #include "scheduledata.h"
 #include <QWidget>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QThread>
+#include <QCoreApplication>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent) {
+            //Initialize schedule pointer
+    schedule = nullptr;
     setupUI();
     setWindowTitle("School Calendar");
     resize(900, 600);
+
+    //Start server process automatically
+    serverProcess = new QProcess(this);
+    QString serverPath = QCoreApplication::applicationDirPath() + "/SchoolCalendarServer";
+    serverProcess->start(serverPath);
+
+    //Wait for the server to start
+    QThread::msleep(1000);
+
+    //Initialize network manager and server settings
+    networkManager = new QNetworkAccessManager(this);
+    serverUrl = "http://localhost:8080";
+    apiKey = "your-secret-key";
+
+    //Fetch initial data from the server
+    fetchClasses();
+    fetchEvents();
 }
 
 MainWindow::~MainWindow() {
+    //Stop the server process when client closes
+    if (serverProcess && serverProcess->state() == QProcess::Running){
+        serverProcess->terminate();
+        serverProcess->waitForFinished(3000); //Wait up to 3 seconds
+
+        if (serverProcess->state() == QProcess::Running){
+            serverProcess->kill(); //Force kill if still running
+        }
+    }
+
+    //Clean up schedule
+    if (schedule){
+        delete schedule;
+    }
 }
 
 void MainWindow::setupUI() {
@@ -56,10 +94,26 @@ void MainWindow::setupUI() {
 
 void MainWindow::onDateSelected(const QDate &date) {
     selectedDateLabel->setText(date.toString("dddd, MMMM d, yyyy"));
+    updateEventListForDate(date);
+}
 
-    // TODO: Load events for selected date
+void MainWindow::updateEventListForDate(const QDate &date) {
     eventList->clear();
-    eventList->addItem("No events for this day (coming soon...)");
+
+    if (!schedule) {
+        eventList->addItem("Loading...");
+        return;
+    }
+
+    QVector<QString> events = schedule->getEventsForDate(date);
+
+    if (events.isEmpty()) {
+        eventList->addItem("No events for this day");
+    } else {
+        for (const QString &event : events) {
+            eventList->addItem(event);
+        }
+    }
 }
 
 void MainWindow::onAddClassClicked() {
@@ -70,4 +124,90 @@ void MainWindow::onAddClassClicked() {
 void MainWindow::onAddExamClicked() {
     // TODO: Open dialog to add exam
     eventList->addItem("Add Exam feature coming soon...");
+}
+
+
+void MainWindow::fetchClasses(){
+    QNetworkRequest request(QUrl(serverUrl + "/api/classes"));
+    request.setRawHeader("X-API-Key", apiKey.toUtf8());
+
+    QNetworkReply *reply = networkManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply](){
+        onClassesFetched(reply);
+    });
+}
+
+void MainWindow::fetchEvents(){
+    QNetworkRequest request(QUrl(serverUrl + "/api/events"));
+    request.setRawHeader("X-API-Key", apiKey.toUtf8());
+
+    QNetworkReply *reply = networkManager->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply](){
+        onEventsFetched(reply);
+    });
+}
+
+void MainWindow::onClassesFetched(QNetworkReply *reply){
+    reply->deleteLater();
+
+    if (reply->error() != QNetworkReply::NoError){
+        eventList->addItem("Error fetching classes: " + reply->errorString());
+        return;
+    }
+
+    QByteArray responseData = reply->readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(responseData);
+    QJsonArray classesArray = doc.array();
+
+    //Clear existing schedule and load classes 
+    if(schedule){
+        delete schedule;
+    }
+    schedule = new Schedule();
+
+    for(const QJsonValue &val : classesArray){
+        RecurringClass cls = RecurringClass::fromJson(val.toObject());
+        schedule->addRecurringClass(cls);
+    }
+
+    //Refresh display
+    onDateSelected(calendar->selectedDate());
+}
+
+void MainWindow::onEventsFetched(QNetworkReply *reply){
+    reply->deleteLater();
+
+    if (reply->error() != QNetworkReply::NoError){
+        eventList->addItem("Error fetching events: " + reply->errorString());
+        return;
+    }
+
+    QByteArray responseData = reply->readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(responseData);
+    QJsonArray eventsArray = doc.array();
+
+    //Load Events into schedule
+    if (!schedule){
+        schedule = new Schedule();
+    }
+
+    for(const QJsonValue &val : eventsArray){
+        OneTimeEvent evt = OneTimeEvent::fromJson(val.toObject());
+        schedule->addOneTimeEvent(evt);
+    }
+
+    //Refresh display
+    onDateSelected(calendar->selectedDate());
+}
+
+void MainWindow::onClassAdded(QNetworkReply *reply){
+    reply->deleteLater();
+
+    if (reply->error() != QNetworkReply::NoError){
+        eventList->addItem("Error adding class: " + reply->errorString());
+        return;
+    }
+
+    //Refresh data from server
+    fetchClasses();
 }

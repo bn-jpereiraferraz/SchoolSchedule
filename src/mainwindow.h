@@ -8,6 +8,10 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QNetworkReply>
+#include <QProcess>
 
 class Schedule;  // Forward declaration
 
@@ -22,6 +26,9 @@ private slots:
     void onDateSelected(const QDate &date);
     void onAddClassClicked();
     void onAddExamClicked();
+    void onClassesFetched(QNetworkReply *reply);
+    void onEventsFetched(QNetworkReply *reply);
+    void onClassAdded (QNetworkReply *reply);
 
 private:
     void setupUI();
@@ -33,6 +40,14 @@ private:
     QLabel *selectedDateLabel;
     Schedule *schedule;
     QString scheduleFilePath;
+    QNetworkAccessManager *networkManager;
+    QString serverUrl;
+    QString apiKey;
+    QProcess *serverProcess;
+
+    void fetchClasses();
+    void fetchEvents();
+    void updateEventListForDate(const QDate &date);
 
     void loadSchedule();
     void saveSchedule();
