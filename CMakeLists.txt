@@ -10,6 +10,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(SchoolCalendarShared STATIC
     shared/scheduledata.cpp
     shared/scheduledata.h
+    shared/jsonhelpers.cpp
+    shared/jsonhelpers.h
+    shared/entityfinder.cpp
+    shared/entityfinder.h
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Core)
@@ -29,10 +33,20 @@ add_executable(SchoolCalendar
     src/main.cpp
     src/mainwindow.cpp
     src/mainwindow.h
+    src/basedialog.cpp
+    src/basedialog.h
     src/addclassdialog.cpp
     src/addclassdialog.h
     src/addeventdialog.cpp
     src/addeventdialog.h
+    src/networkrequestbuilder.cpp
+    src/networkrequestbuilder.h
+    src/jsonbuilders.cpp
+    src/jsonbuilders.h
+    src/apiresponsehandler.cpp
+    src/apiresponsehandler.h
+    src/displayformatter.cpp
+    src/displayformatter.h
 )
 
 target_link_libraries(SchoolCalendar
@@ -52,6 +66,10 @@ target_include_directories(SchoolCalendar PRIVATE
 # ============================================
 add_executable(SchoolCalendarServer
     server/main.cpp
+    server/requesthandler.cpp
+    server/requesthandler.h
+    server/jsonconverter.cpp
+    server/jsonconverter.h
 )
 
 target_link_libraries(SchoolCalendarServer

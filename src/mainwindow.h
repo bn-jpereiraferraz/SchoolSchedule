@@ -29,10 +29,20 @@ private slots:
     void onClassesFetched(QNetworkReply *reply);
     void onEventsFetched(QNetworkReply *reply);
     void onClassAdded (QNetworkReply *reply);
+    void onContextMenu(const QPoint &pos);
+
+    // Context menu handlers
+    void onCancelClassSession(int classId);
+    void onDeleteClass(int classId);
+    void onEditClass(int classId);
+    void onEditEvent(int eventId);
+    void onDeleteEvent(int eventId);
 
 private:
     void setupUI();
 
+    QMap<QListWidgetItem*, int> itemToClassId;
+    QMap<QListWidgetItem*, int> itemToEventId;
     QCalendarWidget *calendar;
     QListWidget *eventList;
     QPushButton *addClassButton;
@@ -48,9 +58,6 @@ private:
     void fetchClasses();
     void fetchEvents();
     void updateEventListForDate(const QDate &date);
-
-    void loadSchedule();
-    void saveSchedule();
 };
 
 #endif // MAINWINDOW_H

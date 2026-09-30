@@ -8,21 +8,42 @@
 #include <QSet>
 
 class RecurringClass {
-    public:
-        QString name;
-        int dayOfWeek;
-        QTime startTime;
-        QTime endTime;
-        QString room;
-        QString teacher;
-        QSet<QDate> cancelledDates;
+private:
+    int id;
+    QString name;
+    int dayOfWeek;
+    QTime startTime;
+    QTime endTime;
+    QString room;
+    QString teacher;
+    QSet<QDate> cancelledDates;
 
+public:
     //Default Constructor
-    RecurringClass() : dayOfWeek(1){}
+    RecurringClass() : id(-1), dayOfWeek(1){}
 
     //Overloaded Constructor
     RecurringClass(const QString &name, int dayOfWeek, const QTime &start, const QTime &end, const QString &room = "", const QString &teacher = "")
-        : name (name), dayOfWeek(dayOfWeek), startTime(start), endTime(end), room(room), teacher(teacher){}
+        : id(-1), name (name), dayOfWeek(dayOfWeek), startTime(start), endTime(end), room(room), teacher(teacher){}
+
+    // Getters
+    int getId() const { return id; }
+    QString getName() const { return name; }
+    int getDayOfWeek() const { return dayOfWeek; }
+    QTime getStartTime() const { return startTime; }
+    QTime getEndTime() const { return endTime; }
+    QString getRoom() const { return room; }
+    QString getTeacher() const { return teacher; }
+    const QSet<QDate>& getCancelledDates() const { return cancelledDates; }
+
+    // Setters
+    void setId(int newId) { id = newId; }
+    void setName(const QString &newName) { name = newName; }
+    void setDayOfWeek(int day) { dayOfWeek = day; }
+    void setStartTime(const QTime &time) { startTime = time; }
+    void setEndTime(const QTime &time) { endTime = time; }
+    void setRoom(const QString &newRoom) { room = newRoom; }
+    void setTeacher(const QString &newTeacher) { teacher = newTeacher; }
 
     //Check if this class is cancelled on a specific date
     bool isCancelledOn(const QDate &date)const{
@@ -48,23 +69,43 @@ class RecurringClass {
 
 //Represents a one-time event (exam, test, etc.)
 class OneTimeEvent{
-    public:
-        QString name;
-        QDate date;
-        QTime startTime;
-        QTime endTime;
-        QString location;
-        QString notes;
+private:
+    int id;
+    QString name;
+    QDate date;
+    QTime startTime;
+    QTime endTime;
+    QString location;
+    QString notes;
 
+public:
     //Default Constructor
-    OneTimeEvent(){}
+    OneTimeEvent() : id(-1) {}
 
     //Overloaded Constructor
     OneTimeEvent(const QString &name, const QDate &date,
                  const QTime &start, const QTime &end = QTime(),
                  const QString &location = "", const QString &notes = "")
-        : name(name), date(date), startTime(start), endTime(end), location(location), notes(notes){}
-    
+        : id(-1), name(name), date(date), startTime(start), endTime(end), location(location), notes(notes){}
+
+    // Getters
+    int getId() const { return id; }
+    QString getName() const { return name; }
+    QDate getDate() const { return date; }
+    QTime getStartTime() const { return startTime; }
+    QTime getEndTime() const { return endTime; }
+    QString getLocation() const { return location; }
+    QString getNotes() const { return notes; }
+
+    // Setters
+    void setId(int newId) { id = newId; }
+    void setName(const QString &newName) { name = newName; }
+    void setDate(const QDate &newDate) { date = newDate; }
+    void setStartTime(const QTime &time) { startTime = time; }
+    void setEndTime(const QTime &time) { endTime = time; }
+    void setLocation(const QString &newLocation) { location = newLocation; }
+    void setNotes(const QString &newNotes) { notes = newNotes; }
+
     //Convert JSON for saving
     QJsonObject toJson() const;
 
@@ -117,6 +158,14 @@ class Schedule{
 
         QVector<RecurringClass>& getRecurringClassesMutable(){
             return recurringClasses;
+        }
+
+        QVector<OneTimeEvent>& getOneTimeEventsMutable(){
+            return oneTimeEvents;
+        }
+
+        void clearEvents() {
+            oneTimeEvents.clear();
         }
 
         bool saveToFile(const QString &filename) const;
