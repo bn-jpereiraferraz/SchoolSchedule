@@ -33,6 +33,8 @@ add_executable(SchoolCalendar
     src/main.cpp
     src/mainwindow.cpp
     src/mainwindow.h
+    src/schedulerepository.cpp
+    src/schedulerepository.h
     src/basedialog.cpp
     src/basedialog.h
     src/addclassdialog.cpp

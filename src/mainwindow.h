@@ -8,12 +8,10 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QNetworkReply>
+#include "schedulerepository.h"
 #include <QProcess>
 
-class Schedule;  // Forward declaration
+
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -26,9 +24,6 @@ private slots:
     void onDateSelected(const QDate &date);
     void onAddClassClicked();
     void onAddExamClicked();
-    void onClassesFetched(QNetworkReply *reply);
-    void onEventsFetched(QNetworkReply *reply);
-    void onClassAdded (QNetworkReply *reply);
     void onContextMenu(const QPoint &pos);
 
     // Context menu handlers
@@ -38,8 +33,27 @@ private slots:
     void onEditEvent(int eventId);
     void onDeleteEvent(int eventId);
 
+    //Repository response handlers
+    void onRepositoryError(const QString& operation, const QString& error);
+    void onDataLoaded();
+
 private:
     void setupUI();
+    QVBoxLayout* createLeftPanel();
+    QVBoxLayout* createRightPanel();
+    void connectSignals();
+
+    void startServer();
+    void setupRepository();
+    void initializeRepository();
+
+    // UI population helpers
+    int addClassesToList(const QDate& date, const Schedule* schedule);
+    int addEventsToList(const QDate& date, const Schedule* schedule);
+
+    // Context menu handlers
+    void showClassContextMenu(const QPoint& pos, int classId);
+    void showEventContextMenu(const QPoint& pos, int eventId);
 
     QMap<QListWidgetItem*, int> itemToClassId;
     QMap<QListWidgetItem*, int> itemToEventId;
@@ -48,15 +62,10 @@ private:
     QPushButton *addClassButton;
     QPushButton *addExamButton;
     QLabel *selectedDateLabel;
-    Schedule *schedule;
-    QString scheduleFilePath;
-    QNetworkAccessManager *networkManager;
-    QString serverUrl;
-    QString apiKey;
     QProcess *serverProcess;
 
-    void fetchClasses();
-    void fetchEvents();
+    ScheduleRepository *repository;
+
     void updateEventListForDate(const QDate &date);
 };
 

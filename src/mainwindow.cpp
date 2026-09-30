@@ -1,76 +1,101 @@
 #include "mainwindow.h"
-#include "scheduledata.h"
 #include "entityfinder.h"
-#include "networkrequestbuilder.h"
 #include "jsonbuilders.h"
-#include "apiresponsehandler.h"
 #include "displayformatter.h"
 #include <QWidget>
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QThread>
 #include <QCoreApplication>
 #include "addclassdialog.h"
 #include "addeventdialog.h"
 #include <QMenu>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent) {
-            //Initialize schedule pointer
-    schedule = nullptr;
-    setupUI();
-    setWindowTitle("School Calendar");
-    resize(900, 600);
+    :QMainWindow(parent){
+        setupUI();
+        setWindowTitle("School Calendar");
+        resize(900, 600);
 
-    //Start server process automatically
+        startServer();
+        setupRepository();
+    }
+
+void MainWindow::startServer(){
     serverProcess = new QProcess(this);
     QString serverPath = QCoreApplication::applicationDirPath() + "/SchoolCalendarServer";
+
+    connect(serverProcess, &QProcess::started, this, [this](){
+        initializeRepository();
+    });
+
+    connect(serverProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error){
+        QMessageBox::critical(this, "Server Error", "Failed to start server: " + serverProcess->errorString());
+    });
+
     serverProcess->start(serverPath);
 
-    //Wait for the server to start
-    QThread::msleep(1000);
-
-    //Initialize network manager and server settings
-    networkManager = new QNetworkAccessManager(this);
-    serverUrl = "http://localhost:8080";
-    apiKey = "your-secret-key";
-
-    //Fetch initial data from the server
-    fetchClasses();
-    fetchEvents();
+    //Show loading indicator while server starts
+    eventList->addItem("Starting server...");
 }
 
-MainWindow::~MainWindow() {
+void MainWindow::setupRepository(){
+    repository = new ScheduleRepository("http://localhost:8080", "your-secret-key", this);
+
+    //connect all signals from schedulerepository
+    connect(repository, &ScheduleRepository::classesLoaded, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::eventsLoaded, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::classAdded, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::eventAdded, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::classUpdated, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::eventUpdated, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::classDeleted, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::eventDeleted, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::classSessionCancelled, this, &MainWindow::onDataLoaded);
+    connect(repository, &ScheduleRepository::operationFailed, this, &MainWindow::onRepositoryError);
+}
+
+void MainWindow::initializeRepository(){
+    //Called after server starts
+    eventList->clear();
+    eventList->addItem("Loading data...");
+
+    repository->fetchClasses();
+    repository->fetchEvents();
+}
+
+MainWindow::~MainWindow(){
     //Stop the server process when client closes
     if (serverProcess && serverProcess->state() == QProcess::Running){
         serverProcess->terminate();
-        serverProcess->waitForFinished(3000); //Wait up to 3 seconds
+        serverProcess->waitForFinished(3000);
 
         if (serverProcess->state() == QProcess::Running){
-            serverProcess->kill(); //Force kill if still running
+            serverProcess->kill();
         }
-    }
-
-    //Clean up schedule
-    if (schedule){
-        delete schedule;
     }
 }
 
-void MainWindow::setupUI() {
+void MainWindow::setupUI(){
     QWidget *centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
-
     QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
 
-    // Left side - Calendar
+    mainLayout->addLayout(createLeftPanel(), 2);
+    mainLayout->addLayout(createRightPanel(), 1);
+
+    connectSignals();
+    onDateSelected(calendar->selectedDate());  // Set initial date
+}
+
+QVBoxLayout* MainWindow::createLeftPanel() {
     QVBoxLayout *leftLayout = new QVBoxLayout();
     calendar = new QCalendarWidget();
     calendar->setGridVisible(true);
     leftLayout->addWidget(calendar);
+    return leftLayout;
+}
 
-    // Right side - Events and controls
+QVBoxLayout* MainWindow::createRightPanel() {
     QVBoxLayout *rightLayout = new QVBoxLayout();
 
     selectedDateLabel = new QLabel("Select a date");
@@ -79,84 +104,85 @@ void MainWindow::setupUI() {
 
     eventList = new QListWidget();
     eventList->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(eventList, &QListWidget::customContextMenuRequested, this, &MainWindow::onContextMenu);
     rightLayout->addWidget(eventList);
 
     addClassButton = new QPushButton("Add Recurring Class");
     addExamButton = new QPushButton("Add Test/Exam");
-
     rightLayout->addWidget(addClassButton);
     rightLayout->addWidget(addExamButton);
 
-    mainLayout->addLayout(leftLayout, 2);
-    mainLayout->addLayout(rightLayout, 1);
+    return rightLayout;
+}
 
-    // Connect signals
+void MainWindow::connectSignals() {
     connect(calendar, &QCalendarWidget::selectionChanged, this, [this]() {
         onDateSelected(calendar->selectedDate());
     });
     connect(addClassButton, &QPushButton::clicked, this, &MainWindow::onAddClassClicked);
     connect(addExamButton, &QPushButton::clicked, this, &MainWindow::onAddExamClicked);
-
-    // Set initial date
-    onDateSelected(calendar->selectedDate());
+    connect(eventList, &QListWidget::customContextMenuRequested, this, &MainWindow::onContextMenu);
 }
 
-void MainWindow::onDateSelected(const QDate &date) {
+void MainWindow::onDateSelected(const QDate &date){
     selectedDateLabel->setText(date.toString("dddd, MMMM d, yyyy"));
     updateEventListForDate(date);
 }
 
-void MainWindow::updateEventListForDate(const QDate &date) {
+void MainWindow::updateEventListForDate(const QDate &date){
     eventList->clear();
     itemToClassId.clear();
     itemToEventId.clear();
-    if (!schedule) {
+
+    const Schedule* schedule = repository->getSchedule();
+    if (!schedule){
         eventList->addItem("Loading...");
         return;
     }
 
-    //Add recurring classes
+    int itemCount = 0;
+    itemCount += addClassesToList(date, schedule);
+    itemCount += addEventsToList(date, schedule);
+
+    if (itemCount == 0) {
+        eventList->addItem("No events for this day!");
+    }
+}
+
+int MainWindow::addClassesToList(const QDate& date, const Schedule* schedule) {
     QVector<const RecurringClass*> classes = schedule->getClassesForDate(date);
-    for (const RecurringClass* cls : classes){
+    for (const RecurringClass* cls : classes) {
         QString eventStr = DisplayFormatter::formatClass(*cls);
         QListWidgetItem *item = new QListWidgetItem(eventStr);
         eventList->addItem(item);
-        itemToClassId[item] = cls->getId(); //Store ID Mapping
+        itemToClassId[item] = cls->getId();
     }
+    return classes.size();
+}
 
-
-    //Add One Time Events
+int MainWindow::addEventsToList(const QDate& date, const Schedule* schedule) {
     QVector<const OneTimeEvent*> events = schedule->getOneTimeEventsForDate(date);
-    for (const OneTimeEvent* evt : events){
+    for (const OneTimeEvent* evt : events) {
         QString eventStr = DisplayFormatter::formatEvent(*evt);
         QListWidgetItem *item = new QListWidgetItem(eventStr);
         eventList->addItem(item);
         itemToEventId[item] = evt->getId();
     }
-
-    if (classes.isEmpty() && events.isEmpty()){
-        eventList->addItem("No events for this day!");
-    }
+    return events.size();
 }
 
 void MainWindow::onAddClassClicked() {
     AddClassDialog dialog(this);
 
     if (dialog.exec() == QDialog::Accepted){
-        //Build JSON for POST request
-        QJsonObject classData = JsonBuilders::buildClassJson(dialog);
+        RecurringClass newClass;
+        newClass.setName(dialog.getClassName());
+        newClass.setDayOfWeek(dialog.getDayOfWeek());
+        newClass.setStartTime(dialog.getStartTime());
+        newClass.setEndTime(dialog.getEndTime());
+        newClass.setRoom(dialog.getRoom());
+        newClass.setTeacher(dialog.getTeacher());
 
-        //Send Post request
-        QJsonDocument doc(classData);
-        QByteArray jsonData = doc.toJson();
-
-        QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, "/api/classes", apiKey);
-
-        QNetworkReply *reply = networkManager->post(request, jsonData);
-        connect(reply, &QNetworkReply::finished, this, [this, reply](){
-            onClassAdded(reply);
-        });
+        repository->addClass(newClass);
     }
 }
 
@@ -164,206 +190,79 @@ void MainWindow::onAddExamClicked() {
     AddEventDialog dialog(this);
 
     if (dialog.exec() == QDialog::Accepted){
-        //Build JSON for POST request
-        QJsonObject eventData = JsonBuilders::buildEventJson(dialog);
+        OneTimeEvent newEvent;
+        newEvent.setName(dialog.getEventName());
+        newEvent.setDate(dialog.getDate());
+        newEvent.setStartTime(dialog.getStartTime());
+        newEvent.setEndTime(dialog.getEndTime());
+        newEvent.setLocation(dialog.getLocation());
+        newEvent.setNotes(dialog.getNotes());
 
-        //Send POST Request
-        QJsonDocument doc(eventData);
-        QByteArray jsonData = doc.toJson();
-
-        QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, "/api/events", apiKey);
-
-        QNetworkReply *reply = networkManager->post(request, jsonData);
-        connect(reply, &QNetworkReply::finished, this, [this, reply](){
-            ApiResponseHandler::handleResponse(reply,
-                [this]() { fetchEvents(); },
-                [this](const QString& error) { eventList->addItem("Error adding event: " + error); }
-            );
-        });
+        repository->addEvent(newEvent);
     }
 }
 
+void MainWindow::onContextMenu(const QPoint &pos) {
+    QListWidgetItem *item = eventList->itemAt(pos);
+    if (!item) return;
 
-void MainWindow::fetchClasses(){
-    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, "/api/classes", apiKey);
-
-    QNetworkReply *reply = networkManager->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply](){
-        onClassesFetched(reply);
-    });
+    if (itemToClassId.contains(item)) {
+        showClassContextMenu(pos, itemToClassId[item]);
+    } else if (itemToEventId.contains(item)) {
+        showEventContextMenu(pos, itemToEventId[item]);
+    }
 }
 
-void MainWindow::fetchEvents(){
-    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, "/api/events", apiKey);
+void MainWindow::showClassContextMenu(const QPoint& pos, int classId) {
+    QMenu menu(this);
+    QAction *cancelAction = menu.addAction("Cancel this session");
+    QAction *editAction = menu.addAction("Edit class");
+    QAction *deleteAction = menu.addAction("Delete Class(all dates)");
 
-    QNetworkReply *reply = networkManager->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply](){
-        onEventsFetched(reply);
-    });
-}
+    QAction *selected = menu.exec(eventList->mapToGlobal(pos));
 
-void MainWindow::onClassesFetched(QNetworkReply *reply){
-    reply->deleteLater();
-
-    if (reply->error() != QNetworkReply::NoError){
-        eventList->addItem("Error fetching classes: " + reply->errorString());
-        return;
-    }
-
-    QByteArray responseData = reply->readAll();
-    QJsonDocument doc = QJsonDocument::fromJson(responseData);
-    QJsonArray classesArray = doc.array();
-
-    //Clear existing schedule and load classes 
-    if(schedule){
-        delete schedule;
-    }
-    schedule = new Schedule();
-
-    for(const QJsonValue &val : classesArray){
-        RecurringClass cls = RecurringClass::fromJson(val.toObject());
-        schedule->addRecurringClass(cls);
-    }
-
-    //Refresh display
-    onDateSelected(calendar->selectedDate());
-}
-
-void MainWindow::onEventsFetched(QNetworkReply *reply){
-    reply->deleteLater();
-
-    if (reply->error() != QNetworkReply::NoError){
-        eventList->addItem("Error fetching events: " + reply->errorString());
-        return;
-    }
-
-    QByteArray responseData = reply->readAll();
-    QJsonDocument doc = QJsonDocument::fromJson(responseData);
-    QJsonArray eventsArray = doc.array();
-
-    //Load Events into schedule
-    if (!schedule){
-        schedule = new Schedule();
-    }
-
-    // Clear old events before loading new ones
-    schedule->clearEvents();
-
-    for(const QJsonValue &val : eventsArray){
-        OneTimeEvent evt = OneTimeEvent::fromJson(val.toObject());
-        schedule->addOneTimeEvent(evt);
-    }
-
-    //Refresh display
-    onDateSelected(calendar->selectedDate());
-}
-
-void MainWindow::onClassAdded(QNetworkReply *reply){
-    reply->deleteLater();
-
-    if (reply->error() != QNetworkReply::NoError){
-        eventList->addItem("Error adding class: " + reply->errorString());
-        return;
-    }
-
-    //Refresh data from server
-    fetchClasses();
-}
-
-void MainWindow::onContextMenu(const QPoint &pos){
-   QListWidgetItem *item = eventList->itemAt(pos);
-   if (!item) return;
-
-   //Check if it's a class or event
-   bool isClass = itemToClassId.contains(item);
-   bool isEvent = itemToEventId.contains(item);
-
-   if (!isClass && !isEvent)return;
-
-   //Create context menu
-   QMenu *menu = new QMenu(this);
-
-   if (isClass){
-    int classId = itemToClassId[item];
-
-    QAction *cancelAction = menu->addAction("Cancel this session");
-    QAction *editAction = menu->addAction("Edit class");
-    QAction *deleteAction = menu->addAction("Delete Class(all dates)");
-    QAction *selected = menu->exec(eventList->mapToGlobal(pos));
-
-    if (selected == cancelAction){
+    if (selected == cancelAction) {
         onCancelClassSession(classId);
-    }
-    else if (selected == deleteAction){
+    } else if (selected == deleteAction) {
         onDeleteClass(classId);
-    }
-    else if (selected == editAction){
+    } else if (selected == editAction) {
         onEditClass(classId);
     }
-   }
+}
 
-   if (isEvent){
-    int eventId = itemToEventId[item];
+void MainWindow::showEventContextMenu(const QPoint& pos, int eventId) {
+    QMenu menu(this);
+    QAction *editAction = menu.addAction("Edit event");
+    QAction *deleteAction = menu.addAction("Delete event");
 
-    QAction *editAction = menu->addAction("Edit event");
-    QAction *deleteAction = menu->addAction("Delete event");
-    QAction *selected = menu->exec(eventList->mapToGlobal(pos));
+    QAction *selected = menu.exec(eventList->mapToGlobal(pos));
 
-    if (selected == editAction){
+    if (selected == editAction) {
         onEditEvent(eventId);
-    }
-    else if (selected == deleteAction){
+    } else if (selected == deleteAction) {
         onDeleteEvent(eventId);
     }
-   }
-   delete menu;
 }
 
 void MainWindow::onCancelClassSession(int classId){
-    //send cancel request to server
-    QJsonObject requestData;
-    requestData["date"] = calendar->selectedDate().toString(Qt::ISODate);
-
-    QJsonDocument doc(requestData);
-    QByteArray jsonData = doc.toJson();
-
-    QString endpoint = "/api/classes/" + QString::number(classId) + "/cancel";
-    QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, endpoint, apiKey);
-
-    QNetworkReply *reply = networkManager->post(request, jsonData);
-    connect(reply, &QNetworkReply::finished, this, [this, reply](){
-        ApiResponseHandler::handleResponse(reply,
-            [this]() { fetchClasses(); },
-            [this](const QString& error) { eventList->addItem("Error cancelling class: " + error); }
-        );
-    });
+    repository->cancelClassSession(classId, calendar->selectedDate());
 }
 
 void MainWindow::onDeleteClass(int classId){
-    QString endpoint = "/api/classes/" + QString::number(classId);
-    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, endpoint, apiKey);
-
-    QNetworkReply *reply = networkManager->deleteResource(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply](){
-        ApiResponseHandler::handleResponse(reply,
-            [this]() { fetchClasses(); },
-            [this](const QString& error) { eventList->addItem("Error deleting class: " + error); }
-        );
-    });
+    repository->deleteClass(classId);
 }
 
 void MainWindow::onEditClass(int classId){
-    //Find the class data by ID
+    const Schedule* schedule = repository->getSchedule();
     const RecurringClass* classPtr = EntityFinder::findClassById(*schedule, classId);
 
     if (!classPtr) {
-        eventList->addItem("Error: Class not found for editing");
+        QMessageBox::warning(this, "Error", "Class not found for editing");
         return;
     }
 
-    RecurringClass classToEdit = *classPtr;  // Copy the class data
+    RecurringClass classToEdit = *classPtr;
 
-    //Open Dialog pre-populated with current values
     AddClassDialog dialog(this);
     dialog.setWindowTitle("Edit Recurring Class");
     dialog.setClassName(classToEdit.getName());
@@ -374,37 +273,29 @@ void MainWindow::onEditClass(int classId){
     dialog.setTeacher(classToEdit.getTeacher());
 
     if (dialog.exec() == QDialog::Accepted){
-        //Build JSON for PUT request
-        QJsonObject classData = JsonBuilders::buildClassJson(dialog);
+        RecurringClass updatedClass;
+        updatedClass.setName(dialog.getClassName());
+        updatedClass.setDayOfWeek(dialog.getDayOfWeek());
+        updatedClass.setStartTime(dialog.getStartTime());
+        updatedClass.setEndTime(dialog.getEndTime());
+        updatedClass.setRoom(dialog.getRoom());
+        updatedClass.setTeacher(dialog.getTeacher());
 
-        QJsonDocument doc(classData);
-        QByteArray jsonData = doc.toJson();
-
-        QString endpoint = "/api/classes/" + QString::number(classId);
-        QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, endpoint, apiKey);
-
-        QNetworkReply *reply = networkManager->put(request, jsonData);
-        connect(reply, &QNetworkReply::finished, this, [this, reply](){
-            ApiResponseHandler::handleResponse(reply,
-                [this]() { fetchClasses(); },
-                [this](const QString& error) { eventList->addItem("Error updating class: " + error); }
-            );
-        });
+        repository->updateClass(classId, updatedClass);
     }
 }
 
 void MainWindow::onEditEvent(int eventId){
-    //Find Event by ID
+    const Schedule* schedule = repository->getSchedule();
     const OneTimeEvent* eventPtr = EntityFinder::findEventById(*schedule, eventId);
 
     if (!eventPtr){
-        eventList->addItem("Error: Event not found for editing");
+        QMessageBox::warning(this, "Error", "Event not found for editing");
         return;
     }
 
-    OneTimeEvent eventToEdit = *eventPtr;  // Copy the event data
+    OneTimeEvent eventToEdit = *eventPtr;
 
-    //OPen Dialog pre populated with current values
     AddEventDialog dialog(this);
     dialog.setWindowTitle("Edit Event");
     dialog.setEventName(eventToEdit.getName());
@@ -415,33 +306,27 @@ void MainWindow::onEditEvent(int eventId){
     dialog.setNotes(eventToEdit.getNotes());
 
     if (dialog.exec() == QDialog::Accepted){
-        QJsonObject eventData = JsonBuilders::buildEventJson(dialog);
+        OneTimeEvent updatedEvent;
+        updatedEvent.setName(dialog.getEventName());
+        updatedEvent.setDate(dialog.getDate());
+        updatedEvent.setStartTime(dialog.getStartTime());
+        updatedEvent.setEndTime(dialog.getEndTime());
+        updatedEvent.setLocation(dialog.getLocation());
+        updatedEvent.setNotes(dialog.getNotes());
 
-        QJsonDocument doc(eventData);
-        QByteArray jsonData = doc.toJson();
-
-        QString endpoint = "/api/events/" + QString::number(eventId);
-        QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, endpoint, apiKey);
-
-        QNetworkReply *reply = networkManager->put(request, jsonData);
-        connect(reply, &QNetworkReply::finished, this, [this, reply](){
-            ApiResponseHandler::handleResponse(reply,
-                [this]() { fetchEvents(); },
-                [this](const QString& error) { eventList->addItem("Error updating event: " + error); }
-            );
-        });
+        repository->updateEvent(eventId, updatedEvent);
     }
 }
 
 void MainWindow::onDeleteEvent(int eventId){
-    QString endpoint = "/api/events/" + QString::number(eventId);
-    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, endpoint, apiKey);
+    repository->deleteEvent(eventId);
+}
 
-    QNetworkReply *reply = networkManager->deleteResource(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply](){
-        ApiResponseHandler::handleResponse(reply,
-            [this]() { fetchEvents(); },
-            [this](const QString& error) { eventList->addItem("Error deleting event: " + error); }
-        );
-    });
+void MainWindow::onRepositoryError(const QString& operation, const QString& error){
+    QMessageBox::critical(this, "Operation Failed",
+                         operation + " failed:\n" + error);
+}
+
+void MainWindow::onDataLoaded(){
+    updateEventListForDate(calendar->selectedDate());
 }
