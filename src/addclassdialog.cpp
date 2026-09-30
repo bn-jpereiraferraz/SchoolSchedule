@@ -108,3 +108,24 @@ AddClassDialog::AddClassDialog(QWidget *parent)
     void AddClassDialog::setTeacher(const QString &teacher){
         teacherEdit->setText(teacher);
     }
+
+    void AddClassDialog::accept() {
+        QString errorMsg;
+
+        // Validate class name (required)
+        if (!validateNotEmpty(nameEdit->text(), "Class name", errorMsg)) {
+            showValidationError(errorMsg);
+            nameEdit->setFocus();
+            return;
+        }
+
+        // Validate time range
+        if (!validateTimeRange(startTimeEdit->time(), endTimeEdit->time(), errorMsg)) {
+            showValidationError(errorMsg);
+            startTimeEdit->setFocus();
+            return;
+        }
+
+        // All validation passed
+        QDialog::accept();
+    }

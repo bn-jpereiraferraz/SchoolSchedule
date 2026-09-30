@@ -83,3 +83,12 @@ target_include_directories(SchoolCalendarServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/server
     ${CMAKE_CURRENT_SOURCE_DIR}/shared
 )
+
+# ============================================
+# Tests
+# ============================================
+option(BUILD_TESTS "Build the tests" ON)
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

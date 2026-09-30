@@ -3,10 +3,10 @@
 
 // Find recurring class by ID (mutable version)
 RecurringClass* EntityFinder::findClassById(Schedule& schedule, int id) {
-    auto& classes = schedule.getRecurringClassesMutable();
+    const auto& classes = schedule.getRecurringClasses();
     for (int i = 0; i < classes.size(); i++) {
         if (classes[i].getId() == id) {
-            return &classes[i];
+            return const_cast<RecurringClass*>(&classes[i]);
         }
     }
     return nullptr;
@@ -25,10 +25,10 @@ const RecurringClass* EntityFinder::findClassById(const Schedule& schedule, int 
 
 // Find one-time event by ID (mutable version)
 OneTimeEvent* EntityFinder::findEventById(Schedule& schedule, int id) {
-    auto& events = schedule.getOneTimeEventsMutable();
+    const auto& events = schedule.getOneTimeEvents();
     for (int i = 0; i < events.size(); i++) {
         if (events[i].getId() == id) {
-            return &events[i];
+            return const_cast<OneTimeEvent*>(&events[i]);
         }
     }
     return nullptr;

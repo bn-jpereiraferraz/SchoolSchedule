@@ -1,0 +1,1 @@
+add_qt_test(test_entityfinder test_entityfinder.cpp)

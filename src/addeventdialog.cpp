@@ -100,3 +100,23 @@ AddEventDialog::AddEventDialog(QWidget *parent)
         notesEdit->setPlainText(notes);
     }
 
+    void AddEventDialog::accept() {
+        QString errorMsg;
+
+        // Validate event name (required)
+        if (!validateNotEmpty(nameEdit->text(), "Event name", errorMsg)) {
+            showValidationError(errorMsg);
+            nameEdit->setFocus();
+            return;
+        }
+
+        // Validate time range
+        if (!validateTimeRange(startTimeEdit->time(), endTimeEdit->time(), errorMsg)) {
+            showValidationError(errorMsg);
+            startTimeEdit->setFocus();
+            return;
+        }
+
+        // All validation passed
+        QDialog::accept();
+    }

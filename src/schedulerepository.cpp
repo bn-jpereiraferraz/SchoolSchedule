@@ -2,6 +2,7 @@
 #include "networkrequestbuilder.h"
 #include "jsonbuilders.h"
 #include "apiresponsehandler.h"
+#include "constants.h"
 #include <QJsonDocument>
 #include <QJsonArray>
 
@@ -20,14 +21,14 @@ const Schedule* ScheduleRepository::getSchedule()const{
 }
 
 void ScheduleRepository::fetchClasses(){
-    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, "/api/classes", apiKey);
+    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, Constants::API_CLASSES, apiKey);
 
     QNetworkReply* reply = networkManager->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply](){onClassesFetched(reply);});
 }
 
 void ScheduleRepository::fetchEvents(){
-    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, "/api/events", apiKey);
+    QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, Constants::API_EVENTS, apiKey);
 
     QNetworkReply* reply = networkManager->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply](){onEventsFetched(reply);});
@@ -37,15 +38,15 @@ void ScheduleRepository::addClass(const RecurringClass& cls){
     QJsonObject classData;
     classData["name"] = cls.getName();
     classData["dayOfWeek"] = cls.getDayOfWeek();
-    classData["startTime"] = cls.getStartTime().toString("HH:mm");
-    classData["endTime"] = cls.getEndTime().toString("HH:mm");
+    classData["startTime"] = cls.getStartTime().toString(Constants::TIME_FORMAT);
+    classData["endTime"] = cls.getEndTime().toString(Constants::TIME_FORMAT);
     classData["room"] = cls.getRoom();
     classData["teacher"] = cls.getTeacher();
 
     QJsonDocument doc(classData);
     QByteArray jsonData = doc.toJson();
 
-    QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, "/api/classes", apiKey);
+    QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, Constants::API_CLASSES, apiKey);
 
     QNetworkReply* reply = networkManager->post(request, jsonData);
     connect(reply, &QNetworkReply::finished, this, [this, reply](){onClassAdded(reply);});
@@ -54,16 +55,16 @@ void ScheduleRepository::addClass(const RecurringClass& cls){
 void ScheduleRepository::addEvent(const OneTimeEvent& evt){
     QJsonObject eventData;
     eventData["name"] = evt.getName();
-    eventData["date"] = evt.getDate().toString("yyyy-MM-dd");
-    eventData["startTime"] = evt.getStartTime().toString("HH:mm");
-    eventData["endTime"] = evt.getEndTime().toString("HH:mm");
+    eventData["date"] = evt.getDate().toString(Constants::DATE_FORMAT);
+    eventData["startTime"] = evt.getStartTime().toString(Constants::TIME_FORMAT);
+    eventData["endTime"] = evt.getEndTime().toString(Constants::TIME_FORMAT);
     eventData["location"] = evt.getLocation();
     eventData["notes"] = evt.getNotes();
 
     QJsonDocument doc(eventData);
     QByteArray jsonData = doc.toJson();
 
-    QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, "/api/events", apiKey);
+    QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, Constants::API_EVENTS, apiKey);
     QNetworkReply* reply = networkManager->post(request, jsonData);
     connect(reply, &QNetworkReply::finished, this, [this, reply](){onEventAdded(reply);});
 }
@@ -72,15 +73,15 @@ void ScheduleRepository::updateClass(int id, const RecurringClass& cls){
     QJsonObject classData;
     classData["name"] = cls.getName();
     classData["dayOfWeek"] = cls.getDayOfWeek();
-    classData["startTime"] = cls.getStartTime().toString("HH:mm");
-    classData["endTime"] = cls.getEndTime().toString("HH:mm");
+    classData["startTime"] = cls.getStartTime().toString(Constants::TIME_FORMAT);
+    classData["endTime"] = cls.getEndTime().toString(Constants::TIME_FORMAT);
     classData["room"] = cls.getRoom();
     classData["teacher"] = cls.getTeacher();
 
     QJsonDocument doc(classData);
     QByteArray jsonData = doc.toJson();
 
-    QString endpoint = "/api/classes/" + QString::number(id);
+    QString endpoint = QString(Constants::API_CLASSES_ID).arg(id);
     QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, endpoint, apiKey);
 
     QNetworkReply* reply = networkManager->put(request, jsonData);
@@ -90,16 +91,16 @@ void ScheduleRepository::updateClass(int id, const RecurringClass& cls){
 void ScheduleRepository::updateEvent(int id, const OneTimeEvent& evt){
     QJsonObject eventData;
     eventData["name"] = evt.getName();
-    eventData["date"] = evt.getDate().toString("yyyy-MM-dd");
-    eventData["startTime"] = evt.getStartTime().toString("HH:mm");
-    eventData["endTime"] = evt.getEndTime().toString("HH:mm");
+    eventData["date"] = evt.getDate().toString(Constants::DATE_FORMAT);
+    eventData["startTime"] = evt.getStartTime().toString(Constants::TIME_FORMAT);
+    eventData["endTime"] = evt.getEndTime().toString(Constants::TIME_FORMAT);
     eventData["location"] = evt.getLocation();
     eventData["notes"] = evt.getNotes();
 
     QJsonDocument doc(eventData);
     QByteArray jsonData = doc.toJson();
 
-    QString endpoint = "/api/events/" + QString::number(id);
+    QString endpoint = QString(Constants::API_EVENTS_ID).arg(id);
     QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, endpoint, apiKey);
 
     QNetworkReply* reply = networkManager->put(request, jsonData);
@@ -107,7 +108,7 @@ void ScheduleRepository::updateEvent(int id, const OneTimeEvent& evt){
 }
 
 void ScheduleRepository::deleteClass(int id){
-    QString endpoint = "/api/classes/" + QString::number(id);
+    QString endpoint = QString(Constants::API_CLASSES_ID).arg(id);
     QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, endpoint, apiKey);
 
     QNetworkReply* reply = networkManager->deleteResource(request);
@@ -115,7 +116,7 @@ void ScheduleRepository::deleteClass(int id){
 }
 
 void ScheduleRepository::deleteEvent(int id){
-    QString endpoint = "/api/events/" + QString::number(id);
+    QString endpoint = QString(Constants::API_EVENTS_ID).arg(id);
     QNetworkRequest request = NetworkRequestBuilder::buildRequest(serverUrl, endpoint, apiKey);
 
     QNetworkReply* reply = networkManager->deleteResource(request);
@@ -129,7 +130,7 @@ void ScheduleRepository::cancelClassSession(int id, const QDate& date){
     QJsonDocument doc(requestData);
     QByteArray jsonData = doc.toJson();
 
-    QString endpoint = "/api/classes/" + QString::number(id) + "/cancel";
+    QString endpoint = QString(Constants::API_CLASSES_CANCEL).arg(id);
     QNetworkRequest request = NetworkRequestBuilder::buildJsonRequest(serverUrl, endpoint, apiKey);
 
     QNetworkReply* reply = networkManager->post(request, jsonData);

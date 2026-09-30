@@ -2,6 +2,7 @@
 #include "entityfinder.h"
 #include "jsonbuilders.h"
 #include "displayformatter.h"
+#include "constants.h"
 #include <QWidget>
 #include <QThread>
 #include <QCoreApplication>
@@ -14,7 +15,7 @@ MainWindow::MainWindow(QWidget *parent)
     :QMainWindow(parent){
         setupUI();
         setWindowTitle("School Calendar");
-        resize(900, 600);
+        resize(Constants::DEFAULT_WINDOW_WIDTH, Constants::DEFAULT_WINDOW_HEIGHT);
 
         startServer();
         setupRepository();
@@ -39,7 +40,7 @@ void MainWindow::startServer(){
 }
 
 void MainWindow::setupRepository(){
-    repository = new ScheduleRepository("http://localhost:8080", "your-secret-key", this);
+    repository = new ScheduleRepository(Constants::DEFAULT_SERVER_URL, Constants::DEFAULT_API_KEY, this);
 
     //connect all signals from schedulerepository
     connect(repository, &ScheduleRepository::classesLoaded, this, &MainWindow::onDataLoaded);
@@ -66,8 +67,11 @@ void MainWindow::initializeRepository(){
 MainWindow::~MainWindow(){
     //Stop the server process when client closes
     if (serverProcess && serverProcess->state() == QProcess::Running){
+        // Disconnect error signal to avoid popup during normal shutdown
+        disconnect(serverProcess, &QProcess::errorOccurred, this, nullptr);
+
         serverProcess->terminate();
-        serverProcess->waitForFinished(3000);
+        serverProcess->waitForFinished(Constants::SERVER_SHUTDOWN_TIMEOUT_MS);
 
         if (serverProcess->state() == QProcess::Running){
             serverProcess->kill();
@@ -132,6 +136,12 @@ void MainWindow::updateEventListForDate(const QDate &date){
     eventList->clear();
     itemToClassId.clear();
     itemToEventId.clear();
+
+    // Check if repository is initialized
+    if (!repository) {
+        eventList->addItem("Initializing...");
+        return;
+    }
 
     const Schedule* schedule = repository->getSchedule();
     if (!schedule){

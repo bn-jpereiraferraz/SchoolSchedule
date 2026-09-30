@@ -26,6 +26,9 @@ public:
     void setLocation(const QString &location);
     void setNotes(const QString &notes);
 
+public slots:
+    void accept() override;
+
 private:
     QLineEdit *nameEdit;
     QDateEdit *dateEdit;

@@ -24,7 +24,10 @@ public:
     void setEndTime(const QTime &time);
     void setRoom(const QString &room);
     void setTeacher(const QString &teacher);
-    
+
+public slots:
+    void accept() override;
+
 private:
     QLineEdit *nameEdit;
     QComboBox *dayComboBox;

@@ -205,7 +205,7 @@ int main() {
                 return;
             }
 
-            globalSchedule.getRecurringClassesMutable().removeAt(index);
+            globalSchedule.removeClassAt(index);
 
             //Save to file
             globalSchedule.saveToFile(QString::fromStdString(DATA_FILE));
@@ -241,7 +241,7 @@ int main() {
                 return;
             }
 
-            globalSchedule.getOneTimeEventsMutable().removeAt(index);
+            globalSchedule.removeEventAt(index);
 
             //Save to file
             globalSchedule.saveToFile(QString::fromStdString(DATA_FILE));

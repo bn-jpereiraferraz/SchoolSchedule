@@ -64,7 +64,7 @@ private:
     QLabel *selectedDateLabel;
     QProcess *serverProcess;
 
-    ScheduleRepository *repository;
+    ScheduleRepository *repository = nullptr;
 
     void updateEventListForDate(const QDate &date);
 };
