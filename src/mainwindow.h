@@ -2,7 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QCalendarWidget>
+#include "customcalendar.h"
 #include <QListWidget>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -51,16 +51,22 @@ private:
     int addClassesToList(const QDate& date, const Schedule* schedule);
     int addEventsToList(const QDate& date, const Schedule* schedule);
 
+    //Item styling helpers
+    QListWidgetItem* createStyledClassItem(const RecurringClass& cls);
+    QListWidgetItem* createStyledEventItem(const OneTimeEvent& evt);
+    void applyItemStyle(QListWidgetItem* item, const QString& backgroundColor, const QString& textColor);
+
     // Context menu handlers
     void showClassContextMenu(const QPoint& pos, int classId);
     void showEventContextMenu(const QPoint& pos, int eventId);
 
     QMap<QListWidgetItem*, int> itemToClassId;
     QMap<QListWidgetItem*, int> itemToEventId;
-    QCalendarWidget *calendar;
+    CustomCalendar *calendar;
     QListWidget *eventList;
     QPushButton *addClassButton;
     QPushButton *addExamButton;
+    QPushButton *todayButton;
     QLabel *selectedDateLabel;
     QProcess *serverProcess;
 

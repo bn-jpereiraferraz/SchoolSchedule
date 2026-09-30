@@ -93,7 +93,21 @@ void MainWindow::setupUI(){
 
 QVBoxLayout* MainWindow::createLeftPanel() {
     QVBoxLayout *leftLayout = new QVBoxLayout();
-    calendar = new QCalendarWidget();
+    
+    todayButton = new QPushButton("📅 Today");
+    todayButton->setMaximumWidth(100);
+    todayButton->setStyleSheet(
+        "font-size: 11pt; "
+        "padding: 6px 12px; "
+        "background-color: #2196F3; "
+        "color: white; "
+        "border: none; "
+        "border-radius: 4px; "
+    );
+    leftLayout->addWidget(todayButton);
+
+    //Calendar
+    calendar = new CustomCalendar();
     calendar->setGridVisible(true);
     leftLayout->addWidget(calendar);
     return leftLayout;
@@ -103,7 +117,14 @@ QVBoxLayout* MainWindow::createRightPanel() {
     QVBoxLayout *rightLayout = new QVBoxLayout();
 
     selectedDateLabel = new QLabel("Select a date");
-    selectedDateLabel->setStyleSheet("font-size: 14pt; font-weight: bold;");
+    selectedDateLabel->setStyleSheet(
+        "font-size: 14pt; " 
+        "font-weight: bold; "
+        "color:#212121; "
+        "padding: 8px; "
+        "background-color: #F5F5F5; "
+        "border-radius: 4px; "
+    );
     rightLayout->addWidget(selectedDateLabel);
 
     eventList = new QListWidget();
@@ -122,6 +143,9 @@ void MainWindow::connectSignals() {
     connect(calendar, &QCalendarWidget::selectionChanged, this, [this]() {
         onDateSelected(calendar->selectedDate());
     });
+    connect(todayButton, &QPushButton::clicked, this, [this](){
+        calendar->setSelectedDate(QDate::currentDate());});
+
     connect(addClassButton, &QPushButton::clicked, this, &MainWindow::onAddClassClicked);
     connect(addExamButton, &QPushButton::clicked, this, &MainWindow::onAddExamClicked);
     connect(eventList, &QListWidget::customContextMenuRequested, this, &MainWindow::onContextMenu);
@@ -158,22 +182,45 @@ void MainWindow::updateEventListForDate(const QDate &date){
     }
 }
 
+void MainWindow::applyItemStyle(QListWidgetItem* item, const QString& backgroundColor, const QString& textColor){
+    item->setBackground(QBrush(QColor(backgroundColor)));
+    item->setForeground(QBrush(QColor(textColor)));
+}
+
+QListWidgetItem* MainWindow::createStyledClassItem(const RecurringClass& cls){
+    QString eventStr = DisplayFormatter::formatClassRich(cls);
+    QListWidgetItem *item = new QListWidgetItem(eventStr);
+
+    applyItemStyle(item, Constants::EventColors::CLASS_BG_LIGHT, Constants::EventColors::PRIMARY_TEXT);
+
+    return item;
+}
+
+QListWidgetItem* MainWindow::createStyledEventItem(const OneTimeEvent& evt){
+    QString eventStr = DisplayFormatter::formatEventRich(evt);
+    QListWidgetItem *item = new QListWidgetItem(eventStr);
+
+    applyItemStyle(item, Constants::EventColors::EXAM_BG_LIGHT, Constants::EventColors::PRIMARY_TEXT);
+    return item;    
+}
+
 int MainWindow::addClassesToList(const QDate& date, const Schedule* schedule) {
     QVector<const RecurringClass*> classes = schedule->getClassesForDate(date);
-    for (const RecurringClass* cls : classes) {
-        QString eventStr = DisplayFormatter::formatClass(*cls);
-        QListWidgetItem *item = new QListWidgetItem(eventStr);
+
+    for(const RecurringClass* cls : classes){
+        QListWidgetItem* item = createStyledClassItem(*cls);
         eventList->addItem(item);
         itemToClassId[item] = cls->getId();
     }
+
     return classes.size();
 }
 
 int MainWindow::addEventsToList(const QDate& date, const Schedule* schedule) {
     QVector<const OneTimeEvent*> events = schedule->getOneTimeEventsForDate(date);
-    for (const OneTimeEvent* evt : events) {
-        QString eventStr = DisplayFormatter::formatEvent(*evt);
-        QListWidgetItem *item = new QListWidgetItem(eventStr);
+
+    for (const OneTimeEvent* evt : events){
+        QListWidgetItem* item = createStyledEventItem(*evt);
         eventList->addItem(item);
         itemToEventId[item] = evt->getId();
     }
@@ -338,5 +385,8 @@ void MainWindow::onRepositoryError(const QString& operation, const QString& erro
 }
 
 void MainWindow::onDataLoaded(){
+    if (repository){
+        calendar->setSchedule(repository->getSchedule());
+    }
     updateEventListForDate(calendar->selectedDate());
 }
