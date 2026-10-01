@@ -30,3 +30,11 @@ SchoolCalendar
 
 # Personal notes
 Client-Server Communication options.txt
+
+# Code review files
+CODE_REVIEW*.md
+*REVIEW*.md
+*REVIEW*.txt
+REFACTORING*.md
+*REFACTORING*.txt
+*ANALYSIS*.md
