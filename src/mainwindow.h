@@ -9,7 +9,14 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include "schedulerepository.h"
+#include "filterstate.h"
+#include "eventlistbuilder.h"
 #include <QProcess>
+#include <QComboBox>
+
+// Forward declarations
+class AddClassDialog;
+class AddEventDialog;
 
 
 
@@ -37,6 +44,12 @@ private slots:
     void onRepositoryError(const QString& operation, const QString& error);
     void onDataLoaded();
 
+    // Dialog-to-domain object helpers
+    RecurringClass createClassFromDialog(const AddClassDialog& dialog);
+    OneTimeEvent createEventFromDialog(const AddEventDialog& dialog);
+    void populateDialogFromClass(AddClassDialog& dialog, const RecurringClass& cls);
+    void populateDialogFromEvent(AddEventDialog& dialog, const OneTimeEvent& evt);
+
 private:
     void setupUI();
     QVBoxLayout* createLeftPanel();
@@ -47,14 +60,22 @@ private:
     void setupRepository();
     void initializeRepository();
 
-    // UI population helpers
-    int addClassesToList(const QDate& date, const Schedule* schedule);
-    int addEventsToList(const QDate& date, const Schedule* schedule);
 
-    //Item styling helpers
-    QListWidgetItem* createStyledClassItem(const RecurringClass& cls);
-    QListWidgetItem* createStyledEventItem(const OneTimeEvent& evt);
-    void applyItemStyle(QListWidgetItem* item, const QString& backgroundColor, const QString& textColor);
+    // Search & Filter UI creation helpers
+    QLineEdit* createQuickDateJumpInput();
+    QComboBox* createFilterTypeCombo();
+    QLineEdit* createSearchByNameInput();
+    QHBoxLayout* createSearchFilterBar();
+
+    // Date parsing helpers
+    QDate parseRelativeDate(const QString& lower, const QDate& today);
+    QDate parseWeekdayDate(const QString& lower, const QDate& today);
+    QDate parseFormattedDate(const QString& input, const QDate& today);
+    QDate parseNaturalLanguageDate(const QString& input);
+
+    // Filter and list management
+    void rebuildFilteredEventList();
+    void updateFilterState();
 
     // Context menu handlers
     void showClassContextMenu(const QPoint& pos, int classId);
@@ -69,6 +90,19 @@ private:
     QPushButton *todayButton;
     QLabel *selectedDateLabel;
     QProcess *serverProcess;
+
+    //Search and Filter UI
+    QLineEdit *quickDateJumpInput;
+    QComboBox *filterTypeComboBox;
+    QLineEdit *searchByNameInput;
+
+    //Filter and list management
+    FilterState filterState;
+    EventListBuilder *eventListBuilder;
+
+    //Cache for current date's events
+    QVector<const RecurringClass*> currentDateClasses;
+    QVector<const OneTimeEvent*> currentDateEvents;
 
     ScheduleRepository *repository = nullptr;
 

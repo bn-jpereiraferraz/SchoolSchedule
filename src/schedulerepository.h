@@ -57,12 +57,17 @@ private slots:
     void onClassSessionCancelled(QNetworkReply* reply);
 
 private:
+    void handleModificationResponse(QNetworkReply* reply,
+                                    const QString& operationName,
+                                    void (ScheduleRepository::*fetchMethod)(),
+                                    void (ScheduleRepository::*successSignal)());
+
     QNetworkAccessManager* networkManager;
     std::unique_ptr<Schedule> schedule; //<- smartpointer
     QString serverUrl;
     QString apiKey;
 
-    
+
 };
 
 

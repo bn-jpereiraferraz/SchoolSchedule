@@ -183,69 +183,43 @@ void ScheduleRepository::onEventsFetched(QNetworkReply* reply){
     emit eventsLoaded();
 }
 
-void ScheduleRepository::onClassAdded(QNetworkReply* reply){
-    ApiResponseHandler::handleResponse(reply, [this](){
-            fetchClasses();
-            emit classAdded();},
-        [this](const QString& error){
-            emit operationFailed("Add Class", error);
+void ScheduleRepository::handleModificationResponse(QNetworkReply* reply,
+                                                     const QString& operationName,
+                                                     void (ScheduleRepository::*fetchMethod)(),
+                                                     void (ScheduleRepository::*successSignal)()) {
+    ApiResponseHandler::handleResponse(reply, [this, fetchMethod, successSignal](){
+            (this->*fetchMethod)();
+            emit (this->*successSignal)();
+        },
+        [this, operationName](const QString& error){
+            emit operationFailed(operationName, error);
     });
+}
+
+void ScheduleRepository::onClassAdded(QNetworkReply* reply){
+    handleModificationResponse(reply, "Add Class", &ScheduleRepository::fetchClasses, &ScheduleRepository::classAdded);
 }
 
 void ScheduleRepository::onEventAdded(QNetworkReply* reply){
-    ApiResponseHandler::handleResponse(reply, [this](){
-            fetchEvents();
-            emit eventAdded();},
-        [this](const QString& error){
-            emit operationFailed("Add Event", error);
-    });
+    handleModificationResponse(reply, "Add Event", &ScheduleRepository::fetchEvents, &ScheduleRepository::eventAdded);
 }
 
 void ScheduleRepository::onClassUpdated(QNetworkReply* reply){
-    ApiResponseHandler::handleResponse(reply, [this](){
-            fetchClasses();
-            emit classUpdated();},
-        [this](const QString& error){
-            emit operationFailed("Update Class", error);
-    });
+    handleModificationResponse(reply, "Update Class", &ScheduleRepository::fetchClasses, &ScheduleRepository::classUpdated);
 }
 
 void ScheduleRepository::onEventUpdated(QNetworkReply* reply){
-    ApiResponseHandler::handleResponse(reply, [this](){
-            fetchEvents();
-            emit eventUpdated();
-    },
-        [this](const QString& error){
-            emit operationFailed("Update Event", error);
-    });
+    handleModificationResponse(reply, "Update Event", &ScheduleRepository::fetchEvents, &ScheduleRepository::eventUpdated);
 }
 
 void ScheduleRepository::onClassDeleted(QNetworkReply* reply){
-    ApiResponseHandler::handleResponse(reply, [this](){
-            fetchClasses();
-            emit classDeleted();
-    },
-        [this](const QString& error){
-            emit operationFailed("Delete Class", error);
-    });
+    handleModificationResponse(reply, "Delete Class", &ScheduleRepository::fetchClasses, &ScheduleRepository::classDeleted);
 }
 
 void ScheduleRepository::onEventDeleted(QNetworkReply* reply){
-    ApiResponseHandler::handleResponse(reply, [this](){
-            fetchEvents();
-            emit eventDeleted();
-    },
-        [this](const QString& error){
-            emit operationFailed("Delete Event", error);
-    });
+    handleModificationResponse(reply, "Delete Event", &ScheduleRepository::fetchEvents, &ScheduleRepository::eventDeleted);
 }
 
 void ScheduleRepository::onClassSessionCancelled(QNetworkReply* reply){
-    ApiResponseHandler::handleResponse(reply, [this](){
-            fetchClasses();
-            emit classSessionCancelled();
-    },
-        [this](const QString& error){
-            emit operationFailed("Cancel Session", error);
-    });
+    handleModificationResponse(reply, "Cancel Session", &ScheduleRepository::fetchClasses, &ScheduleRepository::classSessionCancelled);
 }

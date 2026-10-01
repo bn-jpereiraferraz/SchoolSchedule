@@ -79,11 +79,11 @@ void CustomCalendar::paintBackground(QPainter *painter, const QRect &rect, const
 
 QColor CustomCalendar::getBackgroundColor(const QDate& date)const{
     if (isToday(date)){
-        return QColor("#E3F2FD");
+        return QColor(Constants::EventColors::CALENDAR_TODAY_BG);
     }else if (isWeekend(date)){
-        return QColor("#F5F5F5");
+        return QColor(Constants::EventColors::CALENDAR_WEEKEND_BG);
     }else if(isPast(date)){
-        return QColor("#FAFAFA");
+        return QColor(Constants::EventColors::CALENDAR_PAST_BG);
     }else{
         return Qt::white;
     }

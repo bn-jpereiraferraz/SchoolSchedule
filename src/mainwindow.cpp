@@ -10,10 +10,12 @@
 #include "addeventdialog.h"
 #include <QMenu>
 #include <QMessageBox>
+#include <QComboBox>
 
 MainWindow::MainWindow(QWidget *parent)
     :QMainWindow(parent){
         setupUI();
+        eventListBuilder = new EventListBuilder(eventList, itemToClassId, itemToEventId);
         setWindowTitle("School Calendar");
         resize(Constants::DEFAULT_WINDOW_WIDTH, Constants::DEFAULT_WINDOW_HEIGHT);
 
@@ -126,6 +128,7 @@ QVBoxLayout* MainWindow::createRightPanel() {
         "border-radius: 4px; "
     );
     rightLayout->addWidget(selectedDateLabel);
+    rightLayout->addLayout(createSearchFilterBar());
 
     eventList = new QListWidget();
     eventList->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -139,6 +142,113 @@ QVBoxLayout* MainWindow::createRightPanel() {
     return rightLayout;
 }
 
+QLineEdit* MainWindow::createQuickDateJumpInput() {
+    QLineEdit* input = new QLineEdit(this);
+    input->setPlaceholderText("Jump to date... (e.g 'Dec 25', 'next Monday')");
+    input->setMaximumHeight(32);
+    return input;
+}
+
+QComboBox* MainWindow::createFilterTypeCombo() {
+    QComboBox* combo = new QComboBox(this);
+    combo->addItem("All Events");
+    combo->addItem("Classes Only");
+    combo->addItem("Exams Only");
+    combo->setMaximumWidth(140);
+    combo->setMaximumHeight(32);
+    return combo;
+}
+
+QLineEdit* MainWindow::createSearchByNameInput() {
+    QLineEdit* input = new QLineEdit(this);
+    input->setPlaceholderText("Search event name...");
+    input->setMaximumHeight(32);
+    input->setMaximumWidth(180);
+    return input;
+}
+
+QHBoxLayout* MainWindow::createSearchFilterBar() {
+    QHBoxLayout *searchLayout = new QHBoxLayout();
+
+    quickDateJumpInput = createQuickDateJumpInput();
+    filterTypeComboBox = createFilterTypeCombo();
+    searchByNameInput = createSearchByNameInput();
+
+    searchLayout->addWidget(quickDateJumpInput, 2);
+    searchLayout->addWidget(filterTypeComboBox, 1);
+    searchLayout->addWidget(searchByNameInput, 1);
+
+    return searchLayout;
+}
+
+QDate MainWindow::parseRelativeDate(const QString& lower, const QDate& today) {
+    if (lower == "today") return today;
+    if (lower == "tomorrow") return today.addDays(1);
+    if (lower == "yesterday") return today.addDays(-1);
+    return QDate(); // Invalid
+}
+
+QDate MainWindow::parseWeekdayDate(const QString& lower, const QDate& today) {
+    QStringList dayNames = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"};
+    for (int i = 0; i < dayNames.size(); i++) {
+        if (lower.contains(dayNames[i])) {
+            int targetDayOfWeek = i + 1;
+            int daysAhead = (targetDayOfWeek - today.dayOfWeek()) % 7;
+            if (daysAhead <= 0) daysAhead += 7;
+            return today.addDays(daysAhead);
+        }
+    }
+    return QDate(); // Invalid
+}
+
+QDate MainWindow::parseFormattedDate(const QString& input, const QDate& today) {
+    QStringList dateFormats = {"MMM d", "M/d", "MMMM d", "MM/dd", "d MMM", "d MMMM"};
+    for (const QString& format : dateFormats) {
+        QDate parsed = QDate::fromString(input, format);
+        if (parsed.isValid()) {
+            if (parsed < today) {
+                parsed = parsed.addYears(1);
+            }
+            return parsed;
+        }
+    }
+    return QDate(); // Invalid
+}
+
+QDate MainWindow::parseNaturalLanguageDate(const QString& input) {
+    QString lower = input.trimmed().toLower();
+    QDate today = QDate::currentDate();
+
+    QDate result = parseRelativeDate(lower, today);
+    if (result.isValid()) return result;
+
+    result = parseWeekdayDate(lower, today);
+    if (result.isValid()) return result;
+
+    result = parseFormattedDate(input, today);
+    if (result.isValid()) return result;
+
+    return QDate(); // Invalid
+}
+
+void MainWindow::rebuildFilteredEventList() {
+    eventListBuilder->clearList();
+
+    int itemCount = 0;
+    itemCount += eventListBuilder->addFilteredClasses(currentDateClasses, filterState);
+    itemCount += eventListBuilder->addFilteredEvents(currentDateEvents, filterState);
+
+    if (itemCount == 0) {
+        eventListBuilder->showEmptyMessage();
+    }
+}
+
+void MainWindow::updateFilterState(){
+    filterState.setFilterType((FilterState::FilterType)filterTypeComboBox->currentIndex());
+    filterState.setSearchText(searchByNameInput->text());
+    rebuildFilteredEventList();
+}
+
 void MainWindow::connectSignals() {
     connect(calendar, &QCalendarWidget::selectionChanged, this, [this]() {
         onDateSelected(calendar->selectedDate());
@@ -149,6 +259,25 @@ void MainWindow::connectSignals() {
     connect(addClassButton, &QPushButton::clicked, this, &MainWindow::onAddClassClicked);
     connect(addExamButton, &QPushButton::clicked, this, &MainWindow::onAddExamClicked);
     connect(eventList, &QListWidget::customContextMenuRequested, this, &MainWindow::onContextMenu);
+
+    //Quick Date Jump 
+    connect(quickDateJumpInput, &QLineEdit::returnPressed, this, [this](){
+        QDate parsedDate = parseNaturalLanguageDate(quickDateJumpInput->text());
+        if (parsedDate.isValid()){
+            quickDateJumpInput->clear();
+            calendar->setSelectedDate(parsedDate);
+        }else{
+            QMessageBox::warning(this, "Invalid Date", "Could not parse date. Try 'Dec 25', 'next Monday'm or 'tomorrow'");
+            quickDateJumpInput->selectAll();
+        }
+    });
+
+    //Filter Type Changed
+    connect(filterTypeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::updateFilterState);
+
+    //Search Text Changed
+    connect(searchByNameInput, &QLineEdit::textChanged, this, &MainWindow::updateFilterState);
+    
 }
 
 void MainWindow::onDateSelected(const QDate &date){
@@ -157,105 +286,51 @@ void MainWindow::onDateSelected(const QDate &date){
 }
 
 void MainWindow::updateEventListForDate(const QDate &date){
-    eventList->clear();
+    //Clear caches
+    currentDateClasses.clear();
+    currentDateEvents.clear();
     itemToClassId.clear();
     itemToEventId.clear();
 
-    // Check if repository is initialized
-    if (!repository) {
+    //Reset search/filter UI
+    searchByNameInput->clear();
+    filterTypeComboBox->setCurrentIndex(0);
+    filterState.setFilterType(FilterState::All);
+    filterState.setSearchText("");
+
+    //Check if repository is initialized
+    if (!repository){
+        eventList->clear();
         eventList->addItem("Initializing...");
         return;
     }
 
     const Schedule* schedule = repository->getSchedule();
     if (!schedule){
+        eventList->clear();
         eventList->addItem("Loading...");
         return;
     }
 
-    int itemCount = 0;
-    itemCount += addClassesToList(date, schedule);
-    itemCount += addEventsToList(date, schedule);
+    //Cache the unfiltered results
+    currentDateClasses = schedule->getClassesForDate(date);
+    currentDateEvents = schedule->getOneTimeEventsForDate(date);
 
-    if (itemCount == 0) {
-        eventList->addItem("No events for this day!");
-    }
-}
-
-void MainWindow::applyItemStyle(QListWidgetItem* item, const QString& backgroundColor, const QString& textColor){
-    item->setBackground(QBrush(QColor(backgroundColor)));
-    item->setForeground(QBrush(QColor(textColor)));
-}
-
-QListWidgetItem* MainWindow::createStyledClassItem(const RecurringClass& cls){
-    QString eventStr = DisplayFormatter::formatClassRich(cls);
-    QListWidgetItem *item = new QListWidgetItem(eventStr);
-
-    applyItemStyle(item, Constants::EventColors::CLASS_BG_LIGHT, Constants::EventColors::PRIMARY_TEXT);
-
-    return item;
-}
-
-QListWidgetItem* MainWindow::createStyledEventItem(const OneTimeEvent& evt){
-    QString eventStr = DisplayFormatter::formatEventRich(evt);
-    QListWidgetItem *item = new QListWidgetItem(eventStr);
-
-    applyItemStyle(item, Constants::EventColors::EXAM_BG_LIGHT, Constants::EventColors::PRIMARY_TEXT);
-    return item;    
-}
-
-int MainWindow::addClassesToList(const QDate& date, const Schedule* schedule) {
-    QVector<const RecurringClass*> classes = schedule->getClassesForDate(date);
-
-    for(const RecurringClass* cls : classes){
-        QListWidgetItem* item = createStyledClassItem(*cls);
-        eventList->addItem(item);
-        itemToClassId[item] = cls->getId();
-    }
-
-    return classes.size();
-}
-
-int MainWindow::addEventsToList(const QDate& date, const Schedule* schedule) {
-    QVector<const OneTimeEvent*> events = schedule->getOneTimeEventsForDate(date);
-
-    for (const OneTimeEvent* evt : events){
-        QListWidgetItem* item = createStyledEventItem(*evt);
-        eventList->addItem(item);
-        itemToEventId[item] = evt->getId();
-    }
-    return events.size();
+    //Apply filters and build List
+    rebuildFilteredEventList();
 }
 
 void MainWindow::onAddClassClicked() {
     AddClassDialog dialog(this);
-
-    if (dialog.exec() == QDialog::Accepted){
-        RecurringClass newClass;
-        newClass.setName(dialog.getClassName());
-        newClass.setDayOfWeek(dialog.getDayOfWeek());
-        newClass.setStartTime(dialog.getStartTime());
-        newClass.setEndTime(dialog.getEndTime());
-        newClass.setRoom(dialog.getRoom());
-        newClass.setTeacher(dialog.getTeacher());
-
-        repository->addClass(newClass);
+    if (dialog.exec() == QDialog::Accepted) {
+        repository->addClass(createClassFromDialog(dialog));
     }
 }
 
 void MainWindow::onAddExamClicked() {
     AddEventDialog dialog(this);
-
-    if (dialog.exec() == QDialog::Accepted){
-        OneTimeEvent newEvent;
-        newEvent.setName(dialog.getEventName());
-        newEvent.setDate(dialog.getDate());
-        newEvent.setStartTime(dialog.getStartTime());
-        newEvent.setEndTime(dialog.getEndTime());
-        newEvent.setLocation(dialog.getLocation());
-        newEvent.setNotes(dialog.getNotes());
-
-        repository->addEvent(newEvent);
+    if (dialog.exec() == QDialog::Accepted) {
+        repository->addEvent(createEventFromDialog(dialog));
     }
 }
 
@@ -318,27 +393,11 @@ void MainWindow::onEditClass(int classId){
         return;
     }
 
-    RecurringClass classToEdit = *classPtr;
-
     AddClassDialog dialog(this);
-    dialog.setWindowTitle("Edit Recurring Class");
-    dialog.setClassName(classToEdit.getName());
-    dialog.setDayOfWeek(classToEdit.getDayOfWeek());
-    dialog.setStartTime(classToEdit.getStartTime());
-    dialog.setEndTime(classToEdit.getEndTime());
-    dialog.setRoom(classToEdit.getRoom());
-    dialog.setTeacher(classToEdit.getTeacher());
+    populateDialogFromClass(dialog, *classPtr);
 
-    if (dialog.exec() == QDialog::Accepted){
-        RecurringClass updatedClass;
-        updatedClass.setName(dialog.getClassName());
-        updatedClass.setDayOfWeek(dialog.getDayOfWeek());
-        updatedClass.setStartTime(dialog.getStartTime());
-        updatedClass.setEndTime(dialog.getEndTime());
-        updatedClass.setRoom(dialog.getRoom());
-        updatedClass.setTeacher(dialog.getTeacher());
-
-        repository->updateClass(classId, updatedClass);
+    if (dialog.exec() == QDialog::Accepted) {
+        repository->updateClass(classId, createClassFromDialog(dialog));
     }
 }
 
@@ -346,32 +405,16 @@ void MainWindow::onEditEvent(int eventId){
     const Schedule* schedule = repository->getSchedule();
     const OneTimeEvent* eventPtr = EntityFinder::findEventById(*schedule, eventId);
 
-    if (!eventPtr){
+    if (!eventPtr) {
         QMessageBox::warning(this, "Error", "Event not found for editing");
         return;
     }
 
-    OneTimeEvent eventToEdit = *eventPtr;
-
     AddEventDialog dialog(this);
-    dialog.setWindowTitle("Edit Event");
-    dialog.setEventName(eventToEdit.getName());
-    dialog.setDate(eventToEdit.getDate());
-    dialog.setStartTime(eventToEdit.getStartTime());
-    dialog.setEndTime(eventToEdit.getEndTime());
-    dialog.setLocation(eventToEdit.getLocation());
-    dialog.setNotes(eventToEdit.getNotes());
+    populateDialogFromEvent(dialog, *eventPtr);
 
-    if (dialog.exec() == QDialog::Accepted){
-        OneTimeEvent updatedEvent;
-        updatedEvent.setName(dialog.getEventName());
-        updatedEvent.setDate(dialog.getDate());
-        updatedEvent.setStartTime(dialog.getStartTime());
-        updatedEvent.setEndTime(dialog.getEndTime());
-        updatedEvent.setLocation(dialog.getLocation());
-        updatedEvent.setNotes(dialog.getNotes());
-
-        repository->updateEvent(eventId, updatedEvent);
+    if (dialog.exec() == QDialog::Accepted) {
+        repository->updateEvent(eventId, createEventFromDialog(dialog));
     }
 }
 
@@ -389,4 +432,45 @@ void MainWindow::onDataLoaded(){
         calendar->setSchedule(repository->getSchedule());
     }
     updateEventListForDate(calendar->selectedDate());
+}
+RecurringClass MainWindow::createClassFromDialog(const AddClassDialog& dialog) {
+    RecurringClass cls;
+    cls.setName(dialog.getClassName());
+    cls.setDayOfWeek(dialog.getDayOfWeek());
+    cls.setStartTime(dialog.getStartTime());
+    cls.setEndTime(dialog.getEndTime());
+    cls.setRoom(dialog.getRoom());
+    cls.setTeacher(dialog.getTeacher());
+    return cls;
+}
+
+OneTimeEvent MainWindow::createEventFromDialog(const AddEventDialog& dialog) {
+    OneTimeEvent evt;
+    evt.setName(dialog.getEventName());
+    evt.setDate(dialog.getDate());
+    evt.setStartTime(dialog.getStartTime());
+    evt.setEndTime(dialog.getEndTime());
+    evt.setLocation(dialog.getLocation());
+    evt.setNotes(dialog.getNotes());
+    return evt;
+}
+
+void MainWindow::populateDialogFromClass(AddClassDialog& dialog, const RecurringClass& cls) {
+    dialog.setWindowTitle("Edit Recurring Class");
+    dialog.setClassName(cls.getName());
+    dialog.setDayOfWeek(cls.getDayOfWeek());
+    dialog.setStartTime(cls.getStartTime());
+    dialog.setEndTime(cls.getEndTime());
+    dialog.setRoom(cls.getRoom());
+    dialog.setTeacher(cls.getTeacher());
+}
+
+void MainWindow::populateDialogFromEvent(AddEventDialog& dialog, const OneTimeEvent& evt) {
+    dialog.setWindowTitle("Edit Event");
+    dialog.setEventName(evt.getName());
+    dialog.setDate(evt.getDate());
+    dialog.setStartTime(evt.getStartTime());
+    dialog.setEndTime(evt.getEndTime());
+    dialog.setLocation(evt.getLocation());
+    dialog.setNotes(evt.getNotes());
 }

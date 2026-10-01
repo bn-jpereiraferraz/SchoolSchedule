@@ -38,6 +38,11 @@ namespace Constants {
         constexpr const char* EXAM_BG_LIGHT = "#FFEBEE";    //Light red
         constexpr const char* EVENT_BG_LIGHT = "#E8F5E9";   //Light green
 
+        //Calendar background colors
+        constexpr const char* CALENDAR_TODAY_BG = "#E3F2FD";    //Light blue for today
+        constexpr const char* CALENDAR_WEEKEND_BG = "#F5F5F5";   //Light gray for weekends
+        constexpr const char* CALENDAR_PAST_BG = "#FAFAFA";      //Very light gray for past dates
+
         //Text Colors
         constexpr const char* PRIMARY_TEXT = "#212121";
         constexpr const char* SECONDARY_TEXT = "#757575";

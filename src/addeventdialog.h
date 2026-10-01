@@ -36,6 +36,28 @@ private:
     QTimeEdit *endTimeEdit;
     QLineEdit *locationEdit;
     QTextEdit *notesEdit;
+    QFormLayout *formLayout;
+
+    //Field creation 
+    void createNameField();
+    void createDateField();
+    void createTimeFields();
+    void createOptionalFields();
+
+    //Validation
+    bool validateName();
+    bool validateDate();
+    bool validateTimeRange();
+    bool validateAllFields() override;
+
+    //setup
+    void connectValidationSignals();
+    void configureTabOrder()override;
+
+    //Error labels
+    QLabel *nameErrorLabel;
+    QLabel *dateErrorLabel;
+    QLabel *timeErrorLabel;
 
 };
 #endif // ADDEVENTDIALOG_H

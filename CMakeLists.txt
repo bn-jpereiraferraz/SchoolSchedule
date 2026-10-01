@@ -51,6 +51,10 @@ add_executable(SchoolCalendar
     src/apiresponsehandler.h
     src/displayformatter.cpp
     src/displayformatter.h
+    src/filterstate.cpp
+    src/filterstate.h
+    src/eventlistbuilder.cpp
+    src/eventlistbuilder.h
 )
 
 target_link_libraries(SchoolCalendar
@@ -74,6 +78,16 @@ add_executable(SchoolCalendarServer
     server/requesthandler.h
     server/jsonconverter.cpp
     server/jsonconverter.h
+    server/idgenerator.cpp
+    server/idgenerator.h
+    server/schoolcalendarserver.cpp
+    server/schoolcalendarserver.h
+    server/handlers/authmiddleware.cpp
+    server/handlers/authmiddleware.h
+    server/handlers/classhandler.cpp
+    server/handlers/classhandler.h
+    server/handlers/eventhandler.cpp
+    server/handlers/eventhandler.h
 )
 
 target_link_libraries(SchoolCalendarServer
