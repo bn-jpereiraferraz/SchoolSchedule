@@ -55,6 +55,8 @@ add_executable(SchoolCalendar
     src/filterstate.h
     src/eventlistbuilder.cpp
     src/eventlistbuilder.h
+    sync/caldavtester.cpp
+    sync/caldavtester.h
 )
 
 target_link_libraries(SchoolCalendar
@@ -67,6 +69,24 @@ target_link_libraries(SchoolCalendar
 target_include_directories(SchoolCalendar PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/shared
+)
+
+# ============================================
+# CalDAV Connection Test
+# ============================================
+add_executable(caldav_test
+    sync/caldav_test.cpp
+    sync/caldavtester.cpp
+    sync/caldavtester.h
+)
+
+target_link_libraries(caldav_test
+    Qt6::Core
+    Qt6::Network
+)
+
+target_include_directories(caldav_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/sync
 )
 
 # ============================================
