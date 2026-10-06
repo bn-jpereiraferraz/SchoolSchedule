@@ -139,8 +139,18 @@ class Schedule{
             }
         }
 
-        //Get all events (classes + one-time events) for a specific date as formated strings
-        QVector<QString> getEventsForDate(const QDate &date) const;
+        // Remove methods for server use (by index)
+        void removeClassAt(int index){
+            if (index >= 0 && index < recurringClasses.size()){
+                recurringClasses.removeAt(index);
+            }
+        }
+
+        void removeEventAt(int index){
+            if (index >= 0 && index < oneTimeEvents.size()){
+                oneTimeEvents.removeAt(index);
+            }
+        }
 
         //Get Recurring Classes that occur on this date(not cancelled)
         QVector<const RecurringClass*> getClassesForDate(const QDate &date) const;
@@ -153,14 +163,6 @@ class Schedule{
         }
 
         const QVector<OneTimeEvent>& getOneTimeEvents()const {
-            return oneTimeEvents;
-        }
-
-        QVector<RecurringClass>& getRecurringClassesMutable(){
-            return recurringClasses;
-        }
-
-        QVector<OneTimeEvent>& getOneTimeEventsMutable(){
             return oneTimeEvents;
         }
 

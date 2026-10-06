@@ -1,0 +1,1 @@
+add_qt_test(test_jsonhelpers test_jsonhelpers.cpp)

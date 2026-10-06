@@ -33,6 +33,10 @@ add_executable(SchoolCalendar
     src/main.cpp
     src/mainwindow.cpp
     src/mainwindow.h
+    src/customcalendar.cpp
+    src/customcalendar.h
+    src/schedulerepository.cpp
+    src/schedulerepository.h
     src/basedialog.cpp
     src/basedialog.h
     src/addclassdialog.cpp
@@ -47,6 +51,12 @@ add_executable(SchoolCalendar
     src/apiresponsehandler.h
     src/displayformatter.cpp
     src/displayformatter.h
+    src/filterstate.cpp
+    src/filterstate.h
+    src/eventlistbuilder.cpp
+    src/eventlistbuilder.h
+    sync/caldavtester.cpp
+    sync/caldavtester.h
 )
 
 target_link_libraries(SchoolCalendar
@@ -62,6 +72,24 @@ target_include_directories(SchoolCalendar PRIVATE
 )
 
 # ============================================
+# CalDAV Connection Test
+# ============================================
+add_executable(caldav_test
+    sync/caldav_test.cpp
+    sync/caldavtester.cpp
+    sync/caldavtester.h
+)
+
+target_link_libraries(caldav_test
+    Qt6::Core
+    Qt6::Network
+)
+
+target_include_directories(caldav_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/sync
+)
+
+# ============================================
 # REST API Server
 # ============================================
 add_executable(SchoolCalendarServer
@@ -70,6 +98,16 @@ add_executable(SchoolCalendarServer
     server/requesthandler.h
     server/jsonconverter.cpp
     server/jsonconverter.h
+    server/idgenerator.cpp
+    server/idgenerator.h
+    server/schoolcalendarserver.cpp
+    server/schoolcalendarserver.h
+    server/handlers/authmiddleware.cpp
+    server/handlers/authmiddleware.h
+    server/handlers/classhandler.cpp
+    server/handlers/classhandler.h
+    server/handlers/eventhandler.cpp
+    server/handlers/eventhandler.h
 )
 
 target_link_libraries(SchoolCalendarServer
@@ -81,3 +119,12 @@ target_include_directories(SchoolCalendarServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/server
     ${CMAKE_CURRENT_SOURCE_DIR}/shared
 )
+
+# ============================================
+# Tests
+# ============================================
+option(BUILD_TESTS "Build the tests" ON)
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
